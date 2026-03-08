@@ -239,7 +239,7 @@ async function searchContent(query, updateRoute = true) {
         hideLoading();
     } catch (error) {
         console.error('Error searching content:', error);
-        if (query === searchQuery && searchQuery) {
+        if (searchQuery && query === searchQuery) {
             showError('Search failed. Please try again.');
         }
         hideLoading();
