@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MovieView - Stream Your Favorite Movies</title>
+    <title>MovieView - Stream Movies & Series</title>
     <!-- Preconnect to video domains for faster streaming -->
     <link rel="preconnect" href="https://www.vidking.net" crossorigin>
     <link rel="dns-prefetch" href="https://www.vidking.net">
@@ -27,6 +27,10 @@
                     class="search-input" 
                     placeholder="Search movies..."
                 >
+            </div>
+            <div class="nav-toggle">
+                <button class="toggle-btn active" id="toggleMovies" onclick="setContentType('movie')">🎬 Movies</button>
+                <button class="toggle-btn" id="toggleSeries" onclick="setContentType('tv')">📺 Series</button>
             </div>
         </div>
     </nav>
@@ -72,6 +76,25 @@
                     <span id="playerYear" class="year"></span>
                 </div>
             </div>
+        </section>
+
+        <!-- Series Detail Section -->
+        <section class="series-detail-section" id="seriesDetailSection" style="display: none;">
+            <button class="back-button" onclick="goBackFromSeriesDetail()">← Back</button>
+            <div class="series-header" id="seriesHeader">
+                <img id="seriesPoster" class="series-poster" src="" alt="">
+                <div class="series-info-content">
+                    <h2 id="seriesTitle"></h2>
+                    <p id="seriesOverview"></p>
+                    <div class="series-meta">
+                        <span id="seriesRating" class="rating"></span>
+                        <span id="seriesYear" class="year"></span>
+                        <span id="seriesSeasonCount" class="year"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="season-tabs" id="seasonTabs"></div>
+            <div class="episodes-grid" id="episodesGrid"></div>
         </section>
 
         <!-- Movies Grid Section -->
@@ -135,13 +158,13 @@
 
         <!-- No Results -->
         <div class="no-results" id="noResults" style="display: none;">
-            <p>No movies found. Try another search.</p>
+            <p>No results found. Try another search.</p>
         </div>
     </div>
 
     <!-- Footer -->
     <footer class="footer">
-        <p>&copy; 2026 MovieView. Powered by TMDB & Vidking Player. Stream responsibly.</p>
+        <p>&copy; 2026 MovieView. Powered by TMDB & Vidking Player. Stream movies & series responsibly.</p>
     </footer>
 
     <script src="recommend.js"></script>
