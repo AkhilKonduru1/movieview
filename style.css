@@ -195,6 +195,15 @@ body {
     z-index: 1;
 }
 
+.player-click-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
 /* Skip Controls Overlay — top right */
 .skip-overlay {
     position: absolute;

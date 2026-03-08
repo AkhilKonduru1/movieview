@@ -46,6 +46,13 @@
                         loading="eager"
                         allow="autoplay; encrypted-media; fullscreen"
                     ></iframe>
+                    <button
+                        id="playerClickOverlay"
+                        class="player-click-overlay"
+                        onclick="togglePlayPause()"
+                        aria-label="Toggle play and pause"
+                        title="Click to pause or resume"
+                    ></button>
                     <!-- Skip indicator overlay (top-right) -->
                     <div class="skip-overlay" id="skipOverlay">
                         <button class="skip-btn" onclick="skipVideo(-10)" title="Skip back 10s">

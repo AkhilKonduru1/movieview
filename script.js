@@ -303,6 +303,7 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
 
     // Show loading overlay, reset state
     _playerReady = false;
+    _isPaused = false;
     _currentTime = resumeTime || 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -520,6 +521,7 @@ function playEpisode(showId, season, episode) {
     const playerUrl = `${VIDKING_BASE_URL}/tv/${showId}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
 
     _playerReady = false;
+    _isPaused = false;
     _currentTime = 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -602,6 +604,33 @@ let _currentPlayingMeta = null;
 let _currentTime = 0;
 let _duration = 0;
 let _playerReady = false;
+let _isPaused = false;
+
+function buildPlayerUrl(meta, timeSeconds, autoPlay) {
+    const progress = Math.max(0, Math.floor(timeSeconds || 0));
+    const autoPlayValue = autoPlay ? 'true' : 'false';
+
+    if (meta.mediaType === 'tv' && meta.season != null && meta.episode != null) {
+        return `${VIDKING_BASE_URL}/tv/${meta.id}/${meta.season}/${meta.episode}?color=3b82f6&autoPlay=${autoPlayValue}&nextEpisode=true&episodeSelector=true&progress=${progress}`;
+    }
+
+    return `${VIDKING_BASE_URL}/movie/${meta.id}?color=3b82f6&autoPlay=${autoPlayValue}&progress=${progress}`;
+}
+
+function togglePlayPause() {
+    if (!_currentPlayingId || !_currentPlayingMeta) return;
+
+    const pl = document.getElementById('playerLoading');
+    if (pl) pl.classList.remove('hidden');
+
+    _playerReady = false;
+    _isPaused = !_isPaused;
+
+    const url = buildPlayerUrl({ ..._currentPlayingMeta, id: _currentPlayingId }, _currentTime, !_isPaused);
+    document.getElementById('videoPlayer').src = url;
+
+    showSkipToast(_isPaused ? 'Paused' : 'Resumed');
+}
 
 window.addEventListener('message', function (event) {
     try {
@@ -621,6 +650,8 @@ window.addEventListener('message', function (event) {
         // Track current playback position for skip controls
         if (message.currentTime != null) _currentTime = message.currentTime;
         if (message.duration != null && message.duration > 0) _duration = message.duration;
+        if (message.event === 'pause') _isPaused = true;
+        if (message.event === 'play' || message.event === 'timeupdate') _isPaused = false;
 
         if (movie && (message.event === 'timeupdate' || message.event === 'pause' || message.event === 'ended')) {
             RecommendationEngine.recordWatch(movie, {
@@ -951,6 +982,7 @@ function skipVideo(seconds) {
     const pl = document.getElementById('playerLoading');
     if (pl) pl.classList.remove('hidden');
     _playerReady = false;
+    _isPaused = false;
     _currentTime = newTime;
 
     document.getElementById('videoPlayer').src = url;
