@@ -239,7 +239,9 @@ async function searchContent(query, updateRoute = true) {
         hideLoading();
     } catch (error) {
         console.error('Error searching content:', error);
-        showError('Search failed. Please try again.');
+        if (query === searchQuery && searchQuery) {
+            showError('Search failed. Please try again.');
+        }
         hideLoading();
     }
 }
