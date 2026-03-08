@@ -303,7 +303,6 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
 
     // Show loading overlay, reset state
     _playerReady = false;
-    _isPaused = false;
     _currentTime = resumeTime || 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -521,7 +520,6 @@ function playEpisode(showId, season, episode) {
     const playerUrl = `${VIDKING_BASE_URL}/tv/${showId}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
 
     _playerReady = false;
-    _isPaused = false;
     _currentTime = 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -604,42 +602,10 @@ let _currentPlayingMeta = null;
 let _currentTime = 0;
 let _duration = 0;
 let _playerReady = false;
-let _isPaused = false;
-
-function sendPlayerCommand(command) {
-    const iframe = document.getElementById('videoPlayer');
-    if (!iframe || !iframe.contentWindow) return;
-
-    // Try a few common command payload shapes for embedded players.
-    const payloads = [
-        { type: 'PLAYER_COMMAND', data: { command } },
-        { type: 'PLAYER_COMMAND', data: { action: command } },
-        { command },
-        { action: command },
-    ];
-
-    payloads.forEach(payload => {
-        iframe.contentWindow.postMessage(payload, '*');
-        iframe.contentWindow.postMessage(JSON.stringify(payload), '*');
-    });
-}
-
-function togglePlayPause() {
-    if (!_currentPlayingId || !_currentPlayingMeta) return;
-
-    if (_isPaused) {
-        sendPlayerCommand('play');
-        showSkipToast('Resuming...');
-    } else {
-        sendPlayerCommand('pause');
-        showSkipToast('Pausing...');
-    }
-}
 
 window.addEventListener('message', function (event) {
     try {
-        const raw = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        const message = raw?.type === 'PLAYER_EVENT' && raw?.data ? raw.data : raw;
+        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (!message || !message.event) return;
 
         // Hide loading overlay once we get any player event
@@ -655,8 +621,6 @@ window.addEventListener('message', function (event) {
         // Track current playback position for skip controls
         if (message.currentTime != null) _currentTime = message.currentTime;
         if (message.duration != null && message.duration > 0) _duration = message.duration;
-        if (message.event === 'pause') _isPaused = true;
-        if (message.event === 'play' || message.event === 'timeupdate') _isPaused = false;
 
         if (movie && (message.event === 'timeupdate' || message.event === 'pause' || message.event === 'ended')) {
             RecommendationEngine.recordWatch(movie, {
@@ -987,7 +951,6 @@ function skipVideo(seconds) {
     const pl = document.getElementById('playerLoading');
     if (pl) pl.classList.remove('hidden');
     _playerReady = false;
-    _isPaused = false;
     _currentTime = newTime;
 
     document.getElementById('videoPlayer').src = url;
