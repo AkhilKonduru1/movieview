@@ -12,6 +12,7 @@ const RecommendationEngine = (() => {
         GENRE_SCORES: 'mv_genre_scores',
         USER_PROFILE: 'mv_user_profile',
         RECO_CACHE: 'mv_reco_cache',
+        CONTINUE_WATCHING: 'mv_continue_watching',
     };
 
     // --- TMDB Genre ID Map ---
@@ -488,6 +489,96 @@ const RecommendationEngine = (() => {
     }
 
     // =========================================================
+    // Continue Watching
+    // =========================================================
+
+    function getContinueWatching() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEYS.CONTINUE_WATCHING)) || [];
+        } catch { return []; }
+    }
+
+    function saveContinueWatching(items) {
+        // Keep max 30 entries
+        localStorage.setItem(STORAGE_KEYS.CONTINUE_WATCHING, JSON.stringify(items.slice(0, 30)));
+    }
+
+    /**
+     * Save or update a continue watching entry.
+     * @param {object} opts
+     * @param {number} opts.id - TMDB ID
+     * @param {string} opts.title
+     * @param {string} opts.poster_path
+     * @param {string} opts.mediaType - 'movie' or 'tv'
+     * @param {number} opts.currentTime - seconds
+     * @param {number} opts.duration - seconds
+     * @param {number} [opts.season]
+     * @param {number} [opts.episode]
+     * @param {number} [opts.vote_average]
+     */
+    function updateContinueWatching(opts) {
+        if (!opts.id || !opts.duration || opts.duration <= 0) return;
+
+        const progress = opts.currentTime / opts.duration;  // 0–1
+
+        // If completed (>95%), remove from continue watching
+        if (progress > 0.95) {
+            removeContinueWatching(opts.id, opts.mediaType, opts.season, opts.episode);
+            return;
+        }
+
+        // Don't save if barely started (<1%)
+        if (progress < 0.01) return;
+
+        const items = getContinueWatching();
+        const key = _cwKey(opts.id, opts.mediaType, opts.season, opts.episode);
+
+        const existing = items.findIndex(i => i._key === key);
+        const entry = {
+            _key: key,
+            id: opts.id,
+            title: opts.title || '',
+            poster_path: opts.poster_path || null,
+            mediaType: opts.mediaType || 'movie',
+            currentTime: Math.floor(opts.currentTime),
+            duration: Math.floor(opts.duration),
+            progress: Math.round(progress * 100),
+            season: opts.season || null,
+            episode: opts.episode || null,
+            vote_average: opts.vote_average || 0,
+            updatedAt: Date.now(),
+        };
+
+        if (existing !== -1) {
+            items[existing] = entry;
+        } else {
+            items.unshift(entry);
+        }
+
+        // Sort by most recently updated
+        items.sort((a, b) => b.updatedAt - a.updatedAt);
+        saveContinueWatching(items);
+    }
+
+    function removeContinueWatching(id, mediaType, season, episode) {
+        const items = getContinueWatching();
+        const key = _cwKey(id, mediaType, season, episode);
+        const filtered = items.filter(i => i._key !== key);
+        saveContinueWatching(filtered);
+    }
+
+    function _cwKey(id, mediaType, season, episode) {
+        if (mediaType === 'tv' && season != null && episode != null) {
+            return `${mediaType}_${id}_s${season}e${episode}`;
+        }
+        return `${mediaType}_${id}`;
+    }
+
+    function clearContinueWatching() {
+        localStorage.removeItem(STORAGE_KEYS.CONTINUE_WATCHING);
+    }
+
+    // =========================================================
     // Clear user data
     // =========================================================
 
@@ -509,6 +600,10 @@ const RecommendationEngine = (() => {
         getWatchHistory,
         scoreMovie,
         clearAllData,
+        getContinueWatching,
+        updateContinueWatching,
+        removeContinueWatching,
+        clearContinueWatching,
         GENRE_MAP,
     };
 })();

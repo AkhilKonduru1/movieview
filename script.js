@@ -30,6 +30,9 @@ async function loadHomePage() {
     hideError();
     hideNoResults();
 
+    // Load continue watching immediately (from localStorage, no network)
+    loadContinueWatching();
+
     // Load recommendations and trending in parallel
     const [recoResult] = await Promise.allSettled([
         loadRecommendations(),
@@ -161,13 +164,24 @@ function playMovieById(id) {
     playMovie(id, movie.title, movie.overview, rating, year);
 }
 
-// Play Movie
-function playMovie(tmdbId, title, overview, rating, year) {
+// Play Movie (optionally resume from a timestamp)
+function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
     // Track current playing movie for progress events
     _currentPlayingId = tmdbId;
+    const movie = moviesCache[tmdbId];
+    _currentPlayingMeta = {
+        id: tmdbId,
+        title: title,
+        poster_path: movie ? movie.poster_path : null,
+        mediaType: 'movie',
+        vote_average: movie ? movie.vote_average : 0,
+    };
 
-    // Update player
-    const playerUrl = `${VIDKING_BASE_URL}/movie/${tmdbId}?color=3b82f6&autoPlay=true`;
+    // Build player URL (with optional resume timestamp)
+    let playerUrl = `${VIDKING_BASE_URL}/movie/${tmdbId}?color=3b82f6&autoPlay=true`;
+    if (resumeTime && resumeTime > 0) {
+        playerUrl += `&progress=${Math.floor(resumeTime)}`;
+    }
     document.getElementById('videoPlayer').src = playerUrl;
     
     // Update movie details
@@ -184,15 +198,41 @@ function playMovie(tmdbId, title, overview, rating, year) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Go Back to Movies
+// Go Back — if user was searching, restore search results; otherwise go home
 function goBack() {
     playerSection.style.display = 'none';
     moviesSection.style.display = 'block';
     document.getElementById('videoPlayer').src = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Refresh recommendations when returning home
-    loadRecommendations();
+    if (searchQuery) {
+        // Restore the search results they had before clicking a movie
+        hideRecoSections();
+        searchInput.value = searchQuery;
+        searchMovies(searchQuery);
+    } else {
+        loadContinueWatching();
+        loadRecommendations();
+    }
+}
+
+// Logo click — always go to the true home page (clear search, show trending + recos)
+function goHome() {
+    playerSection.style.display = 'none';
+    moviesSection.style.display = 'block';
+    document.getElementById('videoPlayer').src = '';
+    searchQuery = '';
+    searchInput.value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    loadHomePage();
+}
+
+// Reset all recommendation data
+function resetRecommendations() {
+    if (!confirm('This will clear your entire watch history, continue watching, and taste profile. Continue?')) return;
+    RecommendationEngine.clearAllData();
+    hideRecoSections();
+    document.getElementById('trendingTitle').textContent = '🔥 Trending Movies';
 }
 
 // UI Helper Functions
@@ -221,8 +261,9 @@ function hideNoResults() {
     noResults.style.display = 'none';
 }
 
-// Watch progress tracking — feeds into recommendation engine
+// Watch progress tracking — feeds into recommendation engine + continue watching
 let _currentPlayingId = null;
+let _currentPlayingMeta = null; // { id, title, poster_path, mediaType, season, episode, vote_average }
 
 window.addEventListener('message', function (event) {
     try {
@@ -239,14 +280,20 @@ window.addEventListener('message', function (event) {
             });
         }
 
-        // Also save simple progress for resume
-        if (movieId && message.event === 'timeupdate') {
-            localStorage.setItem(`watch_progress_${movieId}`, JSON.stringify({
-                movieId,
-                progress: message.currentTime,
+        // Update Continue Watching
+        if (movieId && message.currentTime > 0 && message.duration > 0) {
+            const meta = _currentPlayingMeta || {};
+            RecommendationEngine.updateContinueWatching({
+                id: movieId,
+                title: meta.title || (movie ? movie.title : ''),
+                poster_path: meta.poster_path || (movie ? movie.poster_path : null),
+                mediaType: meta.mediaType || 'movie',
+                currentTime: message.currentTime,
                 duration: message.duration,
-                timestamp: Date.now(),
-            }));
+                season: meta.season || message.season || null,
+                episode: meta.episode || message.episode || null,
+                vote_average: meta.vote_average || (movie ? movie.vote_average : 0),
+            });
         }
     } catch (error) {
         // ignore non-JSON messages
@@ -400,8 +447,135 @@ function renderGenreProfile(stats) {
 }
 
 function hideRecoSections() {
-    ['recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
+    ['continueSection', 'recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
+}
+
+// =========================================================
+// Continue Watching UI
+// =========================================================
+
+function loadContinueWatching() {
+    const items = RecommendationEngine.getContinueWatching();
+    const grid = document.getElementById('continueGrid');
+    const section = document.getElementById('continueSection');
+    if (!grid || !section) return;
+
+    if (items.length === 0) {
+        section.style.display = 'none';
+        return;
+    }
+
+    grid.innerHTML = items.map(item => {
+        const safeTitle = escapeHtml(item.title || 'Untitled');
+        const backdropUrl = item.poster_path
+            ? `https://image.tmdb.org/t/p/w780${item.poster_path}`
+            : 'https://via.placeholder.com/360x200?text=No+Image';
+        const timeLeft = formatTime(item.duration - item.currentTime);
+        const episodeTag = (item.mediaType === 'tv' && item.season != null && item.episode != null)
+            ? `<span class="cw-episode-tag">S${item.season} E${item.episode}</span>`
+            : '';
+
+        return `
+            <div class="cw-card" onclick="resumeWatching(${item.id}, '${item.mediaType}', ${item.currentTime}, ${item.season}, ${item.episode})">
+                <button class="cw-remove" onclick="event.stopPropagation(); removeCW(${item.id}, '${item.mediaType}', ${item.season}, ${item.episode})" title="Remove">✕</button>
+                <div class="cw-poster-wrap">
+                    <img src="${backdropUrl}" alt="${safeTitle}"
+                         onerror="this.src='https://via.placeholder.com/360x200?text=No+Image'">
+                    <div class="cw-play-overlay">
+                        <div class="cw-play-icon">▶</div>
+                    </div>
+                    <div class="cw-progress-bar">
+                        <div class="cw-progress-fill" style="width: ${item.progress}%"></div>
+                    </div>
+                </div>
+                <div class="cw-info">
+                    <div class="cw-title">${safeTitle}</div>
+                    <div class="cw-meta">
+                        ${episodeTag}
+                        <span>${timeLeft} left</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    section.style.display = 'block';
+}
+
+function resumeWatching(id, mediaType, currentTime, season, episode) {
+    if (mediaType === 'tv' && season != null && episode != null) {
+        // TV show resume
+        _currentPlayingId = id;
+        _currentPlayingMeta = {
+            id, title: '', poster_path: null, mediaType: 'tv',
+            season, episode, vote_average: 0,
+        };
+
+        // Fetch show details from TMDB for title
+        fetch(`${TMDB_BASE_URL}/tv/${id}?api_key=${TMDB_API_KEY}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(show => {
+                if (show) {
+                    _currentPlayingMeta.title = show.name;
+                    _currentPlayingMeta.poster_path = show.poster_path;
+                    document.getElementById('playerTitle').textContent = show.name;
+                    document.getElementById('playerOverview').textContent =
+                        `Season ${season}, Episode ${episode} — ${show.overview || ''}`;
+                    document.getElementById('playerRating').textContent = `⭐ ${(show.vote_average || 0).toFixed(1)}`;
+                    document.getElementById('playerYear').textContent = '';
+                }
+            }).catch(() => {});
+
+        let playerUrl = `${VIDKING_BASE_URL}/tv/${id}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
+        if (currentTime > 0) playerUrl += `&progress=${Math.floor(currentTime)}`;
+        document.getElementById('videoPlayer').src = playerUrl;
+
+        document.getElementById('playerTitle').textContent = `TV Show ${id}`;
+        document.getElementById('playerOverview').textContent = `Season ${season}, Episode ${episode}`;
+        document.getElementById('playerRating').textContent = '';
+        document.getElementById('playerYear').textContent = '';
+
+        moviesSection.style.display = 'none';
+        playerSection.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+        // Movie resume — fetch details if not cached
+        const cached = moviesCache[id];
+        if (cached) {
+            const rating = cached.vote_average ? cached.vote_average.toFixed(1) : 'N/A';
+            const year = cached.release_date ? new Date(cached.release_date).getFullYear() : 'N/A';
+            playMovie(id, cached.title, cached.overview, rating, year, currentTime);
+        } else {
+            // Fetch from TMDB
+            fetch(`${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}`)
+                .then(r => r.ok ? r.json() : null)
+                .then(movie => {
+                    if (movie) {
+                        moviesCache[movie.id] = movie;
+                        const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
+                        const year = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
+                        playMovie(id, movie.title, movie.overview, rating, year, currentTime);
+                    }
+                }).catch(() => {
+                    // Fallback: play without details
+                    playMovie(id, 'Movie', '', 'N/A', 'N/A', currentTime);
+                });
+        }
+    }
+}
+
+function removeCW(id, mediaType, season, episode) {
+    RecommendationEngine.removeContinueWatching(id, mediaType, season, episode);
+    loadContinueWatching();
+}
+
+function formatTime(seconds) {
+    if (!seconds || seconds < 0) return '0m';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
 }
