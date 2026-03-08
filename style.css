@@ -53,6 +53,11 @@ body {
     gap: 30px;
 }
 
+.nav-brand a {
+    text-decoration: none;
+    color: inherit;
+}
+
 .nav-brand h1 {
     font-size: 28px;
     font-weight: 700;
@@ -61,6 +66,7 @@ body {
     -webkit-text-fill-color: transparent;
     background-clip: text;
     white-space: nowrap;
+    cursor: pointer;
 }
 
 .nav-search {
