@@ -46,17 +46,6 @@
                         loading="eager"
                         allow="autoplay; encrypted-media; fullscreen"
                     ></iframe>
-                    <!-- Skip indicator overlay (top-right) -->
-                    <div class="skip-overlay" id="skipOverlay">
-                        <button class="skip-btn" onclick="skipVideo(-10)" title="Skip back 10s">
-                            <span class="skip-icon">⏪</span>
-                            <span class="skip-label">10s</span>
-                        </button>
-                        <button class="skip-btn" onclick="skipVideo(10)" title="Skip forward 10s">
-                            <span class="skip-icon">⏩</span>
-                            <span class="skip-label">10s</span>
-                        </button>
-                    </div>
                     <!-- Loading shimmer -->
                     <div class="player-loading" id="playerLoading">
                         <div class="player-spinner"></div>
@@ -95,53 +84,6 @@
 
         <!-- Movies Grid Section -->
         <section class="movies-section" id="moviesSection">
-
-            <div class="section-tabs" id="sectionTabs">
-                <button class="section-tab active" id="homeTabBtn" onclick="setMainTab('home')">🏠 Home</button>
-                <button class="section-tab" id="recommendationsTabBtn" onclick="setMainTab('recommendations')">🎯 For You</button>
-            </div>
-
-            <!-- Continue Watching -->
-            <section class="reco-section" id="continueSection" style="display: none;">
-                <div class="reco-header">
-                    <h2>▶️ Continue Watching</h2>
-                </div>
-                <div class="reco-row" id="continueGrid"></div>
-            </section>
-
-            <!-- Recommended For You (hidden until user has watch data) -->
-            <section class="reco-section" id="recoSection" style="display: none;">
-                <div class="reco-header">
-                    <h2>🎯 Recommended For You</h2>
-                    <div class="reco-header-right">
-                        <div class="profile-strength" id="profileStrength">
-                            <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
-                            <span class="strength-label" id="strengthLabel"></span>
-                        </div>
-                        <button class="reset-btn" onclick="resetRecommendations()" title="Reset all recommendation data">🗑️ Reset</button>
-                    </div>
-                </div>
-                <div class="reco-row" id="recoGrid"></div>
-            </section>
-
-            <!-- Top Genre Picks -->
-            <section class="reco-section" id="genrePicksSection" style="display: none;">
-                <h2 id="genrePicksTitle">🔥 Top Picks in Action</h2>
-                <div class="reco-row" id="genrePicksGrid"></div>
-            </section>
-
-            <!-- Because You Watched -->
-            <section class="reco-section" id="becauseSection" style="display: none;">
-                <h2 id="becauseTitle">Because You Watched...</h2>
-                <div class="reco-row" id="becauseGrid"></div>
-            </section>
-
-            <!-- Your Top Genres -->
-            <section class="reco-section" id="genreStatsSection" style="display: none;">
-                <h2>📊 Your Taste Profile</h2>
-                <div class="genre-bars" id="genreBars"></div>
-            </section>
-
             <!-- Trending Section -->
             <h2 id="trendingTitle">🔥 Trending Movies & Series</h2>
             <div class="movies-grid" id="moviesGrid">
@@ -168,7 +110,6 @@
         <p>&copy; 2026 MovieView. Powered by TMDB & Vidking Player. Stream movies & series responsibly.</p>
     </footer>
 
-    <script src="recommend.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

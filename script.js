@@ -8,7 +8,6 @@ const VIDKING_BASE_URL = 'https://www.vidking.net/embed';
 let currentPage = 1;
 let searchQuery = '';
 let isLoading = false;
-let activeMainTab = 'home';
 let _currentSeriesId = null;
 let _seriesCache = {};
 let _isRestoringRoute = false;
@@ -56,7 +55,6 @@ function getRoute() {
     const params = new URLSearchParams(window.location.search);
     return {
         view: params.get('view') || 'home',
-        tab: params.get('tab') || 'home',
         q: params.get('q') || '',
         id: params.get('id') ? parseInt(params.get('id'), 10) : null,
         type: params.get('type') || null,
@@ -70,12 +68,6 @@ async function restoreFromUrl() {
     _isRestoringRoute = true;
     try {
         const route = getRoute();
-        activeMainTab = (route.tab === 'recommendations') ? 'recommendations' : 'home';
-
-        const homeBtn = document.getElementById('homeTabBtn');
-        const recoBtn = document.getElementById('recommendationsTabBtn');
-        if (homeBtn) homeBtn.classList.toggle('active', activeMainTab === 'home');
-        if (recoBtn) recoBtn.classList.toggle('active', activeMainTab === 'recommendations');
 
         if (route.view === 'search' && route.q) {
             searchQuery = route.q;
@@ -112,7 +104,7 @@ async function restoreFromUrl() {
         searchQuery = '';
         searchInput.value = '';
         await loadHomePage();
-        updateUrl({ view: 'home', tab: activeMainTab }, true);
+        updateUrl({ view: 'home' }, true);
     } finally {
         _isRestoringRoute = false;
     }
@@ -128,72 +120,13 @@ async function loadHomePage() {
     hideError();
     hideNoResults();
 
-    // Load continue watching immediately (from localStorage, no network)
-    loadContinueWatching();
-
     await loadTrending();
 
-    if (activeMainTab === 'recommendations') {
-        await loadRecommendations();
-    }
-
-    applyTabVisibility();
-    updateUrl({ view: 'home', tab: activeMainTab });
+    updateUrl({ view: 'home' });
     hideLoading();
 }
 
-function setMainTab(tab) {
-    activeMainTab = tab;
 
-    const homeBtn = document.getElementById('homeTabBtn');
-    const recoBtn = document.getElementById('recommendationsTabBtn');
-    if (homeBtn) homeBtn.classList.toggle('active', tab === 'home');
-    if (recoBtn) recoBtn.classList.toggle('active', tab === 'recommendations');
-
-    if (searchQuery) {
-        searchContent(searchQuery);
-        return;
-    }
-
-    updateUrl({ view: 'home', tab: activeMainTab });
-
-    if (tab === 'home') {
-        loadContinueWatching();
-        loadTrending().then(() => applyTabVisibility());
-    } else {
-        loadRecommendations().then(() => applyTabVisibility());
-    }
-}
-
-function applyTabVisibility() {
-    const continueSection = document.getElementById('continueSection');
-    const trendingTitle = document.getElementById('trendingTitle');
-
-    // During search, show search results only
-    if (searchQuery) {
-        if (continueSection) continueSection.style.display = 'none';
-        ['recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        });
-        if (trendingTitle) trendingTitle.style.display = 'block';
-        moviesGrid.style.display = 'grid';
-        return;
-    }
-
-    if (activeMainTab === 'home') {
-        ['recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'none';
-        });
-        if (trendingTitle) trendingTitle.style.display = 'block';
-        moviesGrid.style.display = 'grid';
-    } else {
-        if (continueSection) continueSection.style.display = 'none';
-        if (trendingTitle) trendingTitle.style.display = 'none';
-        moviesGrid.style.display = 'none';
-    }
-}
 
 // Setup search with debounce
 function setupSearchDebounce() {
@@ -212,7 +145,6 @@ function setupSearchDebounce() {
             }
 
             if (searchQuery) {
-                hideRecoSections();
                 searchContent(searchQuery);
             } else {
                 loadHomePage();
@@ -378,9 +310,6 @@ function playMovieById(id) {
     const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
     const year = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
 
-    // Record click in recommendation engine
-    RecommendationEngine.recordClick(movie);
-
     playMovie(id, movie.title, movie.overview, rating, year);
 }
 
@@ -456,17 +385,6 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime, updateRout
     if (pl) pl.classList.remove('hidden');
 
     document.getElementById('videoPlayer').src = playerUrl;
-    
-    // Immediately create a Continue Watching entry so it shows up on return
-    RecommendationEngine.updateContinueWatching({
-        id: tmdbId,
-        title: title,
-        poster_path: movie ? movie.poster_path : null,
-        mediaType: 'movie',
-        currentTime: resumeTime || 1,
-        duration: 7200, // placeholder ~2h until real duration arrives
-        vote_average: movie ? movie.vote_average : 0,
-    });
 
     // Update movie details
     document.getElementById('playerTitle').textContent = title;
@@ -495,7 +413,7 @@ function goBack() {
     // If we were watching a series episode, go back to series detail
     if (_currentSeriesId) {
         document.getElementById('seriesDetailSection').style.display = 'block';
-        updateUrl({ view: 'series', id: _currentSeriesId, tab: activeMainTab });
+        updateUrl({ view: 'series', id: _currentSeriesId });
         return;
     }
 
@@ -503,20 +421,14 @@ function goBack() {
 
     if (searchQuery) {
         // Restore the search results they had before clicking a movie
-        hideRecoSections();
         searchInput.value = searchQuery;
         searchContent(searchQuery);
     } else {
-        loadContinueWatching();
-        if (activeMainTab === 'recommendations') {
-            loadRecommendations();
-        }
-        applyTabVisibility();
-        updateUrl({ view: 'home', tab: activeMainTab });
+        updateUrl({ view: 'home' });
     }
 }
 
-// Logo click — always go to the true home page (clear search, show trending + recos)
+// Logo click — always go to the true home page
 function goHome() {
     playerSection.style.display = 'none';
     document.getElementById('seriesDetailSection').style.display = 'none';
@@ -525,13 +437,8 @@ function goHome() {
     searchQuery = '';
     searchInput.value = '';
     _currentSeriesId = null;
-    activeMainTab = 'home';
-    const homeBtn = document.getElementById('homeTabBtn');
-    const recoBtn = document.getElementById('recommendationsTabBtn');
-    if (homeBtn) homeBtn.classList.add('active');
-    if (recoBtn) recoBtn.classList.remove('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    updateUrl({ view: 'home', tab: 'home' });
+    updateUrl({ view: 'home' });
     loadHomePage();
 }
 
@@ -590,7 +497,7 @@ async function showSeriesDetail(showId, opts = {}) {
         document.getElementById('seriesDetailSection').style.display = 'block';
 
         if (updateUrl) {
-            updateUrl({ view: 'series', id: showId, season: initialSeason || '', tab: activeMainTab });
+            updateUrl({ view: 'series', id: showId, season: initialSeason || '' });
         }
 
         hideLoading();
@@ -607,7 +514,7 @@ function selectSeason(showId, seasonNumber, tabEl) {
     document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
     if (tabEl) tabEl.classList.add('active');
     loadSeasonEpisodes(showId, seasonNumber);
-    updateUrl({ view: 'series', id: showId, season: seasonNumber, tab: activeMainTab });
+    updateUrl({ view: 'series', id: showId, season: seasonNumber });
 }
 
 // Load episodes for a specific season
@@ -678,12 +585,6 @@ function playEpisode(showId, season, episode, opts = {}) {
     };
 
     const genreIds = show.genre_ids || (show.genres || []).map(g => g.id) || [];
-    RecommendationEngine.recordClick({
-        id: showId,
-        title: show.name || show.title || '',
-        genre_ids: genreIds,
-        vote_average: show.vote_average || 0,
-    });
 
     let playerUrl = `${VIDKING_BASE_URL}/tv/${showId}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
     if (resumeTime > 0) playerUrl += `&progress=${Math.floor(resumeTime)}`;
@@ -696,18 +597,6 @@ function playEpisode(showId, season, episode, opts = {}) {
     if (pl) pl.classList.remove('hidden');
 
     document.getElementById('videoPlayer').src = playerUrl;
-
-    RecommendationEngine.updateContinueWatching({
-        id: showId,
-        title: show.name || show.title || '',
-        poster_path: show.poster_path || null,
-        mediaType: 'tv',
-        currentTime: resumeTime || 1,
-        duration: 3600,
-        season: season,
-        episode: episode,
-        vote_average: show.vote_average || 0,
-    });
 
     document.getElementById('playerTitle').textContent = show.name || show.title || 'TV Show';
     document.getElementById('playerOverview').textContent =
@@ -741,20 +630,13 @@ function goBackFromSeriesDetail() {
     moviesSection.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (searchQuery) {
-        updateUrl({ view: 'search', q: searchQuery, tab: activeMainTab });
+        updateUrl({ view: 'search', q: searchQuery });
     } else {
-        updateUrl({ view: 'home', tab: activeMainTab });
+        updateUrl({ view: 'home' });
     }
 }
 
-// Reset all recommendation data
-function resetRecommendations() {
-    if (!confirm('This will clear your entire watch history, continue watching, and taste profile. Continue?')) return;
-    RecommendationEngine.clearAllData();
-    hideRecoSections();
-    document.getElementById('trendingTitle').textContent = '🔥 Trending Movies & Series';
-    applyTabVisibility();
-}
+// Reset all recommendation data - removed
 
 // UI Helper Functions
 function showLoading() {
@@ -815,23 +697,6 @@ function sendVidkingCommand(command) {
     });
 }
 
-function togglePlayerPlayback() {
-    const now = Date.now();
-    if (now - _lastToggleAt < 250) return;
-    _lastToggleAt = now;
-
-    if (_isVideoPaused) {
-        sendVidkingCommand('play');
-        sendVidkingCommand('resume');
-        showSkipToast('Play');
-        _isVideoPaused = false;
-    } else {
-        sendVidkingCommand('pause');
-        showSkipToast('Pause');
-        _isVideoPaused = true;
-    }
-}
-
 window.addEventListener('message', function (event) {
     try {
         const message = normalizePlayerEvent(event.data);
@@ -847,312 +712,17 @@ window.addEventListener('message', function (event) {
         if (message.event === 'play') _isVideoPaused = false;
         if (message.event === 'pause' || message.event === 'ended') _isVideoPaused = true;
 
-        const movieId = message.id || _currentPlayingId;
-        const movie = movieId ? moviesCache[movieId] : null;
-
-        // Track current playback position for skip controls
+        // Track current playback position
         if (message.currentTime != null) _currentTime = message.currentTime;
         if (message.duration != null && message.duration > 0) _duration = message.duration;
-
-        if (movie && (message.event === 'timeupdate' || message.event === 'pause' || message.event === 'ended')) {
-            RecommendationEngine.recordWatch(movie, {
-                currentTime: message.currentTime || 0,
-                duration: message.duration || 0,
-            });
-        }
-
-        // Update Continue Watching
-        if (movieId && message.currentTime > 0 && message.duration > 0) {
-            const meta = _currentPlayingMeta || {};
-            RecommendationEngine.updateContinueWatching({
-                id: movieId,
-                title: meta.title || (movie ? movie.title : ''),
-                poster_path: meta.poster_path || (movie ? movie.poster_path : null),
-                mediaType: meta.mediaType || 'movie',
-                currentTime: message.currentTime,
-                duration: message.duration,
-                season: meta.season || message.season || null,
-                episode: meta.episode || message.episode || null,
-                vote_average: meta.vote_average || (movie ? movie.vote_average : 0),
-            });
-        }
     } catch (error) {
         // ignore non-JSON messages
     }
 });
 
-// =========================================================
-// Recommendation UI
-// =========================================================
+// Removed recommendation and continue watching UI functions
 
-async function loadRecommendations() {
-    const stats = RecommendationEngine.getProfileStats();
-
-    // Not enough watch data yet
-    if (stats.totalMoviesWatched < 1) {
-        document.getElementById('recoSection').style.display = 'none';
-        document.getElementById('genrePicksSection').style.display = 'none';
-        document.getElementById('becauseSection').style.display = 'none';
-        document.getElementById('genreStatsSection').style.display = 'none';
-        return;
-    }
-
-    // Show profile strength
-    renderProfileStrength(stats);
-
-    // Show genre taste profile
-    renderGenreProfile(stats);
-
-    // Load main recommendations
-    try {
-        // Use cache for instant display, then refresh
-        const cached = RecommendationEngine.getCachedRecommendations();
-        if (cached && cached.length > 0) {
-            renderRecoRow('recoGrid', cached, 'recoSection');
-        }
-
-        const recos = await RecommendationEngine.getRecommendations(20);
-        if (recos.length > 0) {
-            renderRecoRow('recoGrid', recos, 'recoSection');
-        }
-    } catch (e) {
-        console.error('Failed to load recommendations:', e);
-    }
-
-    // "Because You Watched" — use last watched movie
-    const history = RecommendationEngine.getWatchHistory();
-    if (history.length >= 1) {
-        const lastWatched = history[history.length - 1];
-        try {
-            const because = await RecommendationEngine.getBecauseYouWatched(lastWatched.movieId, 10);
-            if (because.length > 0) {
-                document.getElementById('becauseTitle').textContent =
-                    `Because You Watched "${lastWatched.title}"`;
-                renderRecoRow('becauseGrid', because, 'becauseSection');
-            }
-        } catch (e) {
-            console.error('Failed to load because-you-watched:', e);
-        }
-    }
-
-    // Top genre picks
-    if (stats.topGenres.length > 0) {
-        const topGenre = stats.topGenres[0];
-        document.getElementById('genrePicksTitle').textContent =
-            `🎬 Top Picks in ${topGenre.name}`;
-        try {
-            const res = await fetch(
-                `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${topGenre.id}&sort_by=vote_average.desc&vote_count.gte=300&page=1`
-            );
-            if (res.ok) {
-                const data = await res.json();
-                const watchedIds = new Set(history.map(h => h.movieId));
-                const filtered = (data.results || []).filter(m => !watchedIds.has(m.id));
-                if (filtered.length > 0) {
-                    renderRecoRow('genrePicksGrid', filtered.slice(0, 15), 'genrePicksSection');
-                }
-            }
-        } catch (e) {
-            console.error('Failed to load genre picks:', e);
-        }
-    }
-}
-
-function renderRecoRow(gridId, movies, sectionId) {
-    const grid = document.getElementById(gridId);
-    const section = document.getElementById(sectionId);
-    if (!grid || !section) return;
-
-    // Cache for click handler
-    movies.forEach(m => { moviesCache[m.id] = m; });
-
-    grid.innerHTML = movies.map(movie => {
-        const posterUrl = movie.poster_path
-            ? `${TMDB_IMAGE_BASE_URL}${movie.poster_path}`
-            : 'https://via.placeholder.com/180x260?text=No+Image';
-        const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
-        const safeTitle = escapeHtml(movie.title || movie.name || '');
-        const score = movie._score || 0;
-        const badgeClass = score >= 70 ? 'high' : score >= 40 ? 'medium' : 'low';
-
-        return `
-            <div class="movie-card" onclick="playMovieById(${movie.id})">
-                ${score > 0 ? `<span class="match-badge ${badgeClass}">${score}% match</span>` : ''}
-                <img src="${posterUrl}" alt="${safeTitle}" class="movie-poster"
-                     onerror="this.src='https://via.placeholder.com/180x260?text=No+Image'">
-                <div class="movie-card-info">
-                    <div class="movie-card-title">${safeTitle}</div>
-                    <div class="movie-card-rating">⭐ ${rating}</div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    section.style.display = (activeMainTab === 'recommendations' && !searchQuery) ? 'block' : 'none';
-}
-
-function renderProfileStrength(stats) {
-    const section = document.getElementById('recoSection');
-    const fill = document.getElementById('strengthFill');
-    const label = document.getElementById('strengthLabel');
-    if (!fill || !label) return;
-
-    fill.style.width = `${stats.profileStrength}%`;
-
-    let strengthText = '';
-    if (stats.profileStrength < 30) strengthText = 'Getting to know you...';
-    else if (stats.profileStrength < 60) strengthText = 'Building your profile';
-    else if (stats.profileStrength < 90) strengthText = 'Great taste profile!';
-    else strengthText = 'Expert-level profile!';
-
-    label.textContent = `${strengthText} (${stats.totalMoviesWatched} watched)`;
-}
-
-function renderGenreProfile(stats) {
-    const section = document.getElementById('genreStatsSection');
-    const container = document.getElementById('genreBars');
-    if (!container || stats.topGenres.length === 0) return;
-
-    container.innerHTML = stats.topGenres.map((genre, i) => `
-        <div class="genre-bar-item">
-            <span class="genre-bar-name">${genre.name}</span>
-            <div class="genre-bar-track">
-                <div class="genre-bar-fill rank-${i + 1}" style="width: ${genre.score}%"></div>
-            </div>
-            <span class="genre-bar-pct">${genre.score}%</span>
-            <span class="genre-bar-count">(${genre.count})</span>
-        </div>
-    `).join('');
-
-    section.style.display = (activeMainTab === 'recommendations' && !searchQuery) ? 'block' : 'none';
-}
-
-function hideRecoSections() {
-    ['continueSection', 'recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-}
-
-// =========================================================
-// Continue Watching UI
-// =========================================================
-
-function loadContinueWatching() {
-    const items = RecommendationEngine.getContinueWatching();
-    const grid = document.getElementById('continueGrid');
-    const section = document.getElementById('continueSection');
-    if (!grid || !section) return;
-
-    if (items.length === 0) {
-        section.style.display = 'none';
-        return;
-    }
-
-    grid.innerHTML = items.map(item => {
-        const safeTitle = escapeHtml(item.title || 'Untitled');
-        const backdropUrl = item.poster_path
-            ? `https://image.tmdb.org/t/p/w780${item.poster_path}`
-            : 'https://via.placeholder.com/360x200?text=No+Image';
-        const timeLeft = formatTime(item.duration - item.currentTime);
-        const episodeTag = (item.mediaType === 'tv' && item.season != null && item.episode != null)
-            ? `<span class="cw-episode-tag">S${item.season} E${item.episode}</span>`
-            : '';
-
-        return `
-            <div class="cw-card" onclick="resumeWatching(${item.id}, '${item.mediaType}', ${item.currentTime}, ${item.season}, ${item.episode})">
-                <button class="cw-remove" onclick="event.stopPropagation(); removeCW(${item.id}, '${item.mediaType}', ${item.season}, ${item.episode})" title="Remove">✕</button>
-                <div class="cw-poster-wrap">
-                    <img src="${backdropUrl}" alt="${safeTitle}"
-                         onerror="this.src='https://via.placeholder.com/360x200?text=No+Image'">
-                    <div class="cw-play-overlay">
-                        <div class="cw-play-icon">▶</div>
-                    </div>
-                    <div class="cw-progress-bar">
-                        <div class="cw-progress-fill" style="width: ${item.progress}%"></div>
-                    </div>
-                </div>
-                <div class="cw-info">
-                    <div class="cw-title">${safeTitle}</div>
-                    <div class="cw-meta">
-                        ${episodeTag}
-                        <span>${timeLeft} left</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-
-    section.style.display = (activeMainTab === 'home' && !searchQuery) ? 'block' : 'none';
-}
-
-function resumeWatching(id, mediaType, currentTime, season, episode) {
-    if (mediaType === 'tv' && season != null && episode != null) {
-        openTvPlayer(id, season, episode, currentTime || 0, true);
-    } else {
-        openMovieById(id, currentTime || 0, true);
-    }
-}
-
-function removeCW(id, mediaType, season, episode) {
-    RecommendationEngine.removeContinueWatching(id, mediaType, season, episode);
-    loadContinueWatching();
-}
-
-function formatTime(seconds) {
-    if (!seconds || seconds < 0) return '0m';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-}
-
-// =========================================================
-// Skip Controls
-// =========================================================
-
-function skipVideo(seconds) {
-    // We can't directly seek inside the iframe, but we can reload
-    // the player at the new timestamp using the progress parameter.
-    const newTime = Math.max(0, Math.min(_currentTime + seconds, _duration - 1));
-    if (!_currentPlayingId || _duration <= 0) return;
-
-    const meta = _currentPlayingMeta || {};
-    let url;
-    if (meta.mediaType === 'tv' && meta.season != null && meta.episode != null) {
-        url = `${VIDKING_BASE_URL}/tv/${_currentPlayingId}/${meta.season}/${meta.episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true&progress=${Math.floor(newTime)}`;
-    } else {
-        url = `${VIDKING_BASE_URL}/movie/${_currentPlayingId}?color=3b82f6&autoPlay=true&progress=${Math.floor(newTime)}`;
-    }
-
-    // Show loading briefly while iframe reloads
-    const pl = document.getElementById('playerLoading');
-    if (pl) pl.classList.remove('hidden');
-    _playerReady = false;
-    _currentTime = newTime;
-
-    document.getElementById('videoPlayer').src = url;
-
-    // Show skip toast
-    showSkipToast(seconds > 0 ? `Skipped +${seconds}s` : `Skipped ${seconds}s`);
-}
-
-let _skipToastEl = null;
-let _skipToastTimeout = null;
-
-function showSkipToast(text) {
-    if (!_skipToastEl) {
-        _skipToastEl = document.createElement('div');
-        _skipToastEl.className = 'skip-toast';
-        document.querySelector('.player-wrapper').appendChild(_skipToastEl);
-    }
-    clearTimeout(_skipToastTimeout);
-    _skipToastEl.textContent = text;
-    _skipToastEl.classList.add('visible');
-    _skipToastTimeout = setTimeout(() => {
-        _skipToastEl.classList.remove('visible');
-    }, 1500);
-}
+// Removed skip controls and playback toggle functions
 
 // =========================================================
 // Hover Preloading — warm up Vidking connection early
@@ -1182,11 +752,6 @@ document.addEventListener('mouseover', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     const iframe = document.getElementById('videoPlayer');
     if (iframe) {
-        iframe.addEventListener('click', () => {
-            if (!playerSection || playerSection.style.display === 'none') return;
-            togglePlayerPlayback();
-        });
-
         iframe.addEventListener('load', () => {
             // Give a brief moment for the player JS to init, then hide overlay
             setTimeout(() => {
