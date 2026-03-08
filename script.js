@@ -8,7 +8,6 @@ const VIDKING_BASE_URL = 'https://www.vidking.net/embed';
 let currentPage = 1;
 let searchQuery = '';
 let isLoading = false;
-let currentContentType = 'movie';
 let _currentSeriesId = null;
 let _seriesCache = {};
 
@@ -71,27 +70,38 @@ function setupSearchDebounce() {
     });
 }
 
-// Load Trending Content (Movies or TV Series)
+// Load Trending Content (Movies + TV Series combined)
 async function loadTrending() {
     try {
         showLoading();
         hideError();
         hideNoResults();
         
-        const mediaType = currentContentType;
-        const response = await fetch(
-            `${TMDB_BASE_URL}/trending/${mediaType}/week?api_key=${TMDB_API_KEY}`
-        );
+        const [movieRes, tvRes] = await Promise.all([
+            fetch(`${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}`),
+            fetch(`${TMDB_BASE_URL}/trending/tv/week?api_key=${TMDB_API_KEY}`),
+        ]);
         
-        if (!response.ok) throw new Error('Failed to fetch trending content');
+        if (!movieRes.ok || !tvRes.ok) throw new Error('Failed to fetch trending content');
         
-        const data = await response.json();
-        const items = data.results.map(item => ({ ...item, _mediaType: mediaType }));
-        displayItems(items);
+        const [movieData, tvData] = await Promise.all([movieRes.json(), tvRes.json()]);
+        
+        const movies = (movieData.results || []).map(m => ({ ...m, _mediaType: 'movie' }));
+        const shows = (tvData.results || []).map(s => ({ ...s, _mediaType: 'tv' }));
+        
+        // Interleave movies and series for a mixed feed
+        const combined = [];
+        const maxLen = Math.max(movies.length, shows.length);
+        for (let i = 0; i < maxLen; i++) {
+            if (i < movies.length) combined.push(movies[i]);
+            if (i < shows.length) combined.push(shows[i]);
+        }
+        
+        displayItems(combined);
         
         const trendingTitle = document.getElementById('trendingTitle');
         if (trendingTitle) {
-            trendingTitle.textContent = mediaType === 'tv' ? '🔥 Trending Series' : '🔥 Trending Movies';
+            trendingTitle.textContent = '🔥 Trending Movies & Series';
         }
         
         hideLoading();
@@ -102,28 +112,32 @@ async function loadTrending() {
     }
 }
 
-// Search Content (Movies or TV Series)
+// Search Content (Movies + TV Series combined)
 async function searchContent(query) {
     try {
         showLoading();
         hideError();
         
-        const mediaType = currentContentType;
-        const endpoint = mediaType === 'tv' ? 'search/tv' : 'search/movie';
-        const response = await fetch(
-            `${TMDB_BASE_URL}/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`
-        );
+        const [movieRes, tvRes] = await Promise.all([
+            fetch(`${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`),
+            fetch(`${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=1`),
+        ]);
         
-        if (!response.ok) throw new Error('Search failed');
+        if (!movieRes.ok || !tvRes.ok) throw new Error('Search failed');
         
-        const data = await response.json();
+        const [movieData, tvData] = await Promise.all([movieRes.json(), tvRes.json()]);
         
-        if (data.results.length === 0) {
+        const movies = (movieData.results || []).map(m => ({ ...m, _mediaType: 'movie' }));
+        const shows = (tvData.results || []).map(s => ({ ...s, _mediaType: 'tv' }));
+        
+        // Merge by popularity (vote_count as proxy) so best results appear first
+        const combined = [...movies, ...shows].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+        
+        if (combined.length === 0) {
             showNoResults();
             moviesGrid.innerHTML = '';
         } else {
-            const items = data.results.map(item => ({ ...item, _mediaType: mediaType }));
-            displayItems(items);
+            displayItems(combined);
             hideNoResults();
         }
         
@@ -296,24 +310,6 @@ function goHome() {
     _currentSeriesId = null;
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadHomePage();
-}
-
-// Toggle between Movies and Series
-function setContentType(type) {
-    currentContentType = type;
-    document.getElementById('toggleMovies').classList.toggle('active', type === 'movie');
-    document.getElementById('toggleSeries').classList.toggle('active', type === 'tv');
-    searchInput.placeholder = type === 'tv' ? 'Search series...' : 'Search movies...';
-
-    _currentSeriesId = null;
-    document.getElementById('seriesDetailSection').style.display = 'none';
-    moviesSection.style.display = 'block';
-
-    if (searchQuery) {
-        searchContent(searchQuery);
-    } else {
-        loadHomePage();
-    }
 }
 
 // Show series detail page with seasons and episodes
@@ -501,7 +497,7 @@ function resetRecommendations() {
     if (!confirm('This will clear your entire watch history, continue watching, and taste profile. Continue?')) return;
     RecommendationEngine.clearAllData();
     hideRecoSections();
-    document.getElementById('trendingTitle').textContent = currentContentType === 'tv' ? '🔥 Trending Series' : '🔥 Trending Movies';
+    document.getElementById('trendingTitle').textContent = '🔥 Trending Movies & Series';
 }
 
 // UI Helper Functions
