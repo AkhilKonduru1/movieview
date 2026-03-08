@@ -52,7 +52,39 @@
 
         <!-- Movies Grid Section -->
         <section class="movies-section" id="moviesSection">
-            <h2>Trending Movies</h2>
+
+            <!-- Recommended For You (hidden until user has watch data) -->
+            <section class="reco-section" id="recoSection" style="display: none;">
+                <div class="reco-header">
+                    <h2>🎯 Recommended For You</h2>
+                    <div class="profile-strength" id="profileStrength">
+                        <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+                        <span class="strength-label" id="strengthLabel"></span>
+                    </div>
+                </div>
+                <div class="reco-row" id="recoGrid"></div>
+            </section>
+
+            <!-- Top Genre Picks -->
+            <section class="reco-section" id="genrePicksSection" style="display: none;">
+                <h2 id="genrePicksTitle">🔥 Top Picks in Action</h2>
+                <div class="reco-row" id="genrePicksGrid"></div>
+            </section>
+
+            <!-- Because You Watched -->
+            <section class="reco-section" id="becauseSection" style="display: none;">
+                <h2 id="becauseTitle">Because You Watched...</h2>
+                <div class="reco-row" id="becauseGrid"></div>
+            </section>
+
+            <!-- Your Top Genres -->
+            <section class="reco-section" id="genreStatsSection" style="display: none;">
+                <h2>📊 Your Taste Profile</h2>
+                <div class="genre-bars" id="genreBars"></div>
+            </section>
+
+            <!-- Trending Section -->
+            <h2 id="trendingTitle">🔥 Trending Movies</h2>
             <div class="movies-grid" id="moviesGrid">
                 <!-- Movies will be loaded here -->
             </div>
@@ -77,6 +109,7 @@
         <p>&copy; 2026 MovieView. Powered by TMDB & Vidking Player. Stream responsibly.</p>
     </footer>
 
+    <script src="recommend.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

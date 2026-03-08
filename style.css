@@ -307,6 +307,216 @@ body {
     margin-top: 60px;
 }
 
+/* ============================
+   Recommendation Sections
+   ============================ */
+
+.reco-section {
+    margin-bottom: 40px;
+}
+
+.reco-section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reco-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.reco-header h2 {
+    margin-bottom: 0;
+}
+
+/* Horizontal scrolling row */
+.reco-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 15px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-color) var(--secondary-color);
+}
+
+.reco-row::-webkit-scrollbar {
+    height: 6px;
+}
+
+.reco-row::-webkit-scrollbar-track {
+    background: var(--secondary-color);
+    border-radius: 3px;
+}
+
+.reco-row::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 3px;
+}
+
+.reco-row .movie-card {
+    min-width: 180px;
+    max-width: 180px;
+    flex-shrink: 0;
+    animation: none;
+}
+
+.reco-row .movie-card .movie-poster {
+    height: 260px;
+}
+
+/* Match score badge on recommendation cards */
+.match-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(16, 185, 129, 0.9);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    z-index: 2;
+}
+
+.match-badge.high {
+    background: rgba(16, 185, 129, 0.9);
+}
+
+.match-badge.medium {
+    background: rgba(59, 130, 246, 0.9);
+}
+
+.match-badge.low {
+    background: rgba(148, 163, 184, 0.8);
+}
+
+.reco-row .movie-card {
+    position: relative;
+}
+
+/* Profile Strength Indicator */
+.profile-strength {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.strength-bar {
+    width: 120px;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.strength-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-color), var(--success-color));
+    border-radius: 3px;
+    transition: width 0.8s ease;
+}
+
+.strength-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* Genre Taste Profile Bars */
+.genre-bars {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+}
+
+.genre-bar-item {
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.3s ease;
+}
+
+.genre-bar-item:hover {
+    border-color: var(--accent-color);
+}
+
+.genre-bar-name {
+    font-weight: 600;
+    font-size: 14px;
+    min-width: 100px;
+    color: var(--text-primary);
+}
+
+.genre-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--primary-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.genre-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s ease;
+}
+
+.genre-bar-fill.rank-1 { background: linear-gradient(90deg, #f59e0b, #ef4444); }
+.genre-bar-fill.rank-2 { background: linear-gradient(90deg, #3b82f6, #8b5cf6); }
+.genre-bar-fill.rank-3 { background: linear-gradient(90deg, #10b981, #06b6d4); }
+.genre-bar-fill.rank-4 { background: linear-gradient(90deg, #ec4899, #f43f5e); }
+.genre-bar-fill.rank-5 { background: linear-gradient(90deg, #6366f1, #a78bfa); }
+
+.genre-bar-pct {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 38px;
+    text-align: right;
+}
+
+.genre-bar-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-left: 4px;
+}
+
+/* "New user" welcome message */
+.reco-welcome {
+    background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 12px;
+    padding: 24px 30px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.reco-welcome h3 {
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: var(--accent-color);
+}
+
+.reco-welcome p {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .navbar .container {
