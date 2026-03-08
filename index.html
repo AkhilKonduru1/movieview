@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MovieView - Stream Your Favorite Movies</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1>🎬 MovieView</h1>
+            </div>
+            <div class="nav-search">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="Search movies..."
+                >
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Player Section -->
+        <section class="player-section" id="playerSection" style="display: none;">
+            <button class="back-button" onclick="goBack()">← Back</button>
+            <div class="player-container">
+                <div class="player-wrapper">
+                    <iframe 
+                        id="videoPlayer"
+                        class="player-iframe"
+                        frameborder="0" 
+                        allowfullscreen
+                        allow="autoplay; encrypted-media"
+                    ></iframe>
+                </div>
+            </div>
+            <div class="movie-details">
+                <h2 id="playerTitle"></h2>
+                <p id="playerOverview"></p>
+                <div class="movie-info">
+                    <span id="playerRating" class="rating"></span>
+                    <span id="playerYear" class="year"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Movies Grid Section -->
+        <section class="movies-section" id="moviesSection">
+            <h2>Trending Movies</h2>
+            <div class="movies-grid" id="moviesGrid">
+                <!-- Movies will be loaded here -->
+            </div>
+        </section>
+
+        <!-- Loading Spinner -->
+        <div class="loading" id="loading" style="display: none;">
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Error Message -->
+        <div class="error-message" id="errorMessage" style="display: none;"></div>
+
+        <!-- No Results -->
+        <div class="no-results" id="noResults" style="display: none;">
+            <p>No movies found. Try another search.</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2026 MovieView. Powered by TMDB & Vidking Player. Stream responsibly.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
