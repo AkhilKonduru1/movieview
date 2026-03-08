@@ -606,35 +606,40 @@ let _duration = 0;
 let _playerReady = false;
 let _isPaused = false;
 
-function buildPlayerUrl(meta, timeSeconds, autoPlay) {
-    const progress = Math.max(0, Math.floor(timeSeconds || 0));
-    const autoPlayValue = autoPlay ? 'true' : 'false';
+function sendPlayerCommand(command) {
+    const iframe = document.getElementById('videoPlayer');
+    if (!iframe || !iframe.contentWindow) return;
 
-    if (meta.mediaType === 'tv' && meta.season != null && meta.episode != null) {
-        return `${VIDKING_BASE_URL}/tv/${meta.id}/${meta.season}/${meta.episode}?color=3b82f6&autoPlay=${autoPlayValue}&nextEpisode=true&episodeSelector=true&progress=${progress}`;
-    }
+    // Try a few common command payload shapes for embedded players.
+    const payloads = [
+        { type: 'PLAYER_COMMAND', data: { command } },
+        { type: 'PLAYER_COMMAND', data: { action: command } },
+        { command },
+        { action: command },
+    ];
 
-    return `${VIDKING_BASE_URL}/movie/${meta.id}?color=3b82f6&autoPlay=${autoPlayValue}&progress=${progress}`;
+    payloads.forEach(payload => {
+        iframe.contentWindow.postMessage(payload, '*');
+        iframe.contentWindow.postMessage(JSON.stringify(payload), '*');
+    });
 }
 
 function togglePlayPause() {
     if (!_currentPlayingId || !_currentPlayingMeta) return;
 
-    const pl = document.getElementById('playerLoading');
-    if (pl) pl.classList.remove('hidden');
-
-    _playerReady = false;
-    _isPaused = !_isPaused;
-
-    const url = buildPlayerUrl({ ..._currentPlayingMeta, id: _currentPlayingId }, _currentTime, !_isPaused);
-    document.getElementById('videoPlayer').src = url;
-
-    showSkipToast(_isPaused ? 'Paused' : 'Resumed');
+    if (_isPaused) {
+        sendPlayerCommand('play');
+        showSkipToast('Resuming...');
+    } else {
+        sendPlayerCommand('pause');
+        showSkipToast('Pausing...');
+    }
 }
 
 window.addEventListener('message', function (event) {
     try {
-        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const raw = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const message = raw?.type === 'PLAYER_EVENT' && raw?.data ? raw.data : raw;
         if (!message || !message.event) return;
 
         // Hide loading overlay once we get any player event
