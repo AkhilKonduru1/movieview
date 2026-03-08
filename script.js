@@ -11,6 +11,7 @@ let isLoading = false;
 let activeMainTab = 'home';
 let _currentSeriesId = null;
 let _seriesCache = {};
+let _isRestoringRoute = false;
 
 // DOM Elements
 const searchInput = document.getElementById('searchInput');
@@ -23,8 +24,102 @@ const moviesSection = document.getElementById('moviesSection');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadHomePage();
     setupSearchDebounce();
+    restoreFromUrl();
+});
+
+// =========================================================
+// URL Routing State
+// =========================================================
+
+function buildUrl(paramsObj = {}) {
+    const url = new URL(window.location.href);
+    url.search = '';
+    Object.entries(paramsObj).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+            url.searchParams.set(k, String(v));
+        }
+    });
+    return `${url.pathname}${url.search}`;
+}
+
+function updateUrl(paramsObj = {}, replace = false) {
+    if (_isRestoringRoute) return;
+    const nextUrl = buildUrl(paramsObj);
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (nextUrl === current) return;
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method]({}, '', nextUrl);
+}
+
+function getRoute() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        view: params.get('view') || 'home',
+        tab: params.get('tab') || 'home',
+        q: params.get('q') || '',
+        id: params.get('id') ? parseInt(params.get('id'), 10) : null,
+        type: params.get('type') || null,
+        season: params.get('season') ? parseInt(params.get('season'), 10) : null,
+        episode: params.get('episode') ? parseInt(params.get('episode'), 10) : null,
+        t: params.get('t') ? parseInt(params.get('t'), 10) : 0,
+    };
+}
+
+async function restoreFromUrl() {
+    _isRestoringRoute = true;
+    try {
+        const route = getRoute();
+        activeMainTab = (route.tab === 'recommendations') ? 'recommendations' : 'home';
+
+        const homeBtn = document.getElementById('homeTabBtn');
+        const recoBtn = document.getElementById('recommendationsTabBtn');
+        if (homeBtn) homeBtn.classList.toggle('active', activeMainTab === 'home');
+        if (recoBtn) recoBtn.classList.toggle('active', activeMainTab === 'recommendations');
+
+        if (route.view === 'search' && route.q) {
+            searchQuery = route.q;
+            searchInput.value = route.q;
+            playerSection.style.display = 'none';
+            document.getElementById('seriesDetailSection').style.display = 'none';
+            moviesSection.style.display = 'block';
+            await searchContent(route.q, false);
+            return;
+        }
+
+        if (route.view === 'series' && route.id) {
+            searchQuery = '';
+            searchInput.value = '';
+            await showSeriesDetail(route.id, { seasonNumber: route.season, updateUrl: false });
+            return;
+        }
+
+        if (route.view === 'watch' && route.id && route.type === 'tv' && route.season && route.episode) {
+            searchQuery = '';
+            searchInput.value = '';
+            await openTvPlayer(route.id, route.season, route.episode, route.t || 0, false);
+            return;
+        }
+
+        if (route.view === 'watch' && route.id && route.type === 'movie') {
+            searchQuery = '';
+            searchInput.value = '';
+            await openMovieById(route.id, route.t || 0, false);
+            return;
+        }
+
+        // Default/home route
+        searchQuery = '';
+        searchInput.value = '';
+        await loadHomePage();
+        updateUrl({ view: 'home', tab: activeMainTab }, true);
+    } finally {
+        _isRestoringRoute = false;
+    }
+}
+
+window.addEventListener('popstate', () => {
+    restoreFromUrl();
 });
 
 // Load everything on the home page
@@ -43,6 +138,7 @@ async function loadHomePage() {
     }
 
     applyTabVisibility();
+    updateUrl({ view: 'home', tab: activeMainTab });
     hideLoading();
 }
 
@@ -58,6 +154,8 @@ function setMainTab(tab) {
         searchContent(searchQuery);
         return;
     }
+
+    updateUrl({ view: 'home', tab: activeMainTab });
 
     if (tab === 'home') {
         loadContinueWatching();
@@ -166,7 +264,7 @@ async function loadTrending() {
 }
 
 // Search Content (Movies + TV Series combined)
-async function searchContent(query) {
+async function searchContent(query, updateRoute = true) {
     try {
         showLoading();
         hideError();
@@ -201,6 +299,10 @@ async function searchContent(query) {
         }
 
         moviesGrid.style.display = 'grid';
+
+        if (updateRoute) {
+            updateUrl({ view: 'search', q: query, tab: activeMainTab });
+        }
         
         hideLoading();
     } catch (error) {
@@ -282,8 +384,52 @@ function playMovieById(id) {
     playMovie(id, movie.title, movie.overview, rating, year);
 }
 
+async function openMovieById(id, resumeTime = 0, updateRoute = true) {
+    const cached = moviesCache[id];
+    if (cached) {
+        const rating = cached.vote_average ? cached.vote_average.toFixed(1) : 'N/A';
+        const year = cached.release_date ? new Date(cached.release_date).getFullYear() : 'N/A';
+        playMovie(id, cached.title || 'Movie', cached.overview || '', rating, year, resumeTime, updateRoute);
+        return;
+    }
+
+    try {
+        const res = await fetch(`${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}`);
+        if (!res.ok) throw new Error('Failed to fetch movie');
+        const movie = await res.json();
+        moviesCache[id] = { ...movie, _mediaType: 'movie' };
+        const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
+        const year = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
+        playMovie(id, movie.title || 'Movie', movie.overview || '', rating, year, resumeTime, updateRoute);
+    } catch {
+        playMovie(id, 'Movie', '', 'N/A', 'N/A', resumeTime, updateRoute);
+    }
+}
+
+async function openTvPlayer(showId, season, episode, resumeTime = 0, updateRoute = true) {
+    let show = _seriesCache[showId] || moviesCache[showId] || null;
+    if (!show || !show.name) {
+        try {
+            const res = await fetch(`${TMDB_BASE_URL}/tv/${showId}?api_key=${TMDB_API_KEY}`);
+            if (res.ok) {
+                show = await res.json();
+                _seriesCache[showId] = show;
+                moviesCache[showId] = { ...show, _mediaType: 'tv', genre_ids: (show.genres || []).map(g => g.id) };
+            }
+        } catch {
+            // Best effort only
+        }
+    }
+
+    playEpisode(showId, season, episode, {
+        resumeTime,
+        updateRoute,
+        showData: show,
+    });
+}
+
 // Play Movie (optionally resume from a timestamp)
-function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
+function playMovie(tmdbId, title, overview, rating, year, resumeTime, updateRoute = true) {
     // Track current playing movie for progress events
     _currentPlayingId = tmdbId;
     const movie = moviesCache[tmdbId];
@@ -333,6 +479,10 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (updateRoute) {
+        updateUrl({ view: 'watch', type: 'movie', id: tmdbId, t: resumeTime ? Math.floor(resumeTime) : '' });
+    }
 }
 
 // Go Back — handles series detail, search results, or home
@@ -344,6 +494,7 @@ function goBack() {
     // If we were watching a series episode, go back to series detail
     if (_currentSeriesId) {
         document.getElementById('seriesDetailSection').style.display = 'block';
+        updateUrl({ view: 'series', id: _currentSeriesId, tab: activeMainTab });
         return;
     }
 
@@ -360,6 +511,7 @@ function goBack() {
             loadRecommendations();
         }
         applyTabVisibility();
+        updateUrl({ view: 'home', tab: activeMainTab });
     }
 }
 
@@ -378,11 +530,13 @@ function goHome() {
     if (homeBtn) homeBtn.classList.add('active');
     if (recoBtn) recoBtn.classList.remove('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    updateUrl({ view: 'home', tab: 'home' });
     loadHomePage();
 }
 
 // Show series detail page with seasons and episodes
-async function showSeriesDetail(showId) {
+async function showSeriesDetail(showId, opts = {}) {
+    const { seasonNumber = null, updateUrl = true } = opts;
     try {
         showLoading();
 
@@ -419,13 +573,24 @@ async function showSeriesDetail(showId) {
             </button>
         `).join('');
 
-        if (seasons.length > 0) {
-            await loadSeasonEpisodes(showId, seasons[0].season_number);
+        const initialSeason = seasonNumber || (seasons.length > 0 ? seasons[0].season_number : null);
+        if (initialSeason != null) {
+            await loadSeasonEpisodes(showId, initialSeason);
+
+            // Keep active tab in sync when restoring or deep-linking to a season
+            const seasonBtns = seasonTabs.querySelectorAll('.season-tab');
+            seasonBtns.forEach(btn => btn.classList.remove('active'));
+            const target = [...seasonBtns].find(btn => btn.textContent.trim() === `Season ${initialSeason}`);
+            if (target) target.classList.add('active');
         }
 
         moviesSection.style.display = 'none';
         playerSection.style.display = 'none';
         document.getElementById('seriesDetailSection').style.display = 'block';
+
+        if (updateUrl) {
+            updateUrl({ view: 'series', id: showId, season: initialSeason || '', tab: activeMainTab });
+        }
 
         hideLoading();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -441,6 +606,7 @@ function selectSeason(showId, seasonNumber, tabEl) {
     document.querySelectorAll('.season-tab').forEach(t => t.classList.remove('active'));
     if (tabEl) tabEl.classList.add('active');
     loadSeasonEpisodes(showId, seasonNumber);
+    updateUrl({ view: 'series', id: showId, season: seasonNumber, tab: activeMainTab });
 }
 
 // Load episodes for a specific season
@@ -494,8 +660,9 @@ async function loadSeasonEpisodes(showId, seasonNumber) {
 }
 
 // Play a specific episode
-function playEpisode(showId, season, episode) {
-    const show = _seriesCache[showId] || moviesCache[showId] || {};
+function playEpisode(showId, season, episode, opts = {}) {
+    const { resumeTime = 0, updateRoute = true, showData = null } = opts;
+    const show = showData || _seriesCache[showId] || moviesCache[showId] || {};
 
     _currentPlayingId = showId;
     _currentSeriesId = showId;
@@ -517,10 +684,11 @@ function playEpisode(showId, season, episode) {
         vote_average: show.vote_average || 0,
     });
 
-    const playerUrl = `${VIDKING_BASE_URL}/tv/${showId}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
+    let playerUrl = `${VIDKING_BASE_URL}/tv/${showId}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
+    if (resumeTime > 0) playerUrl += `&progress=${Math.floor(resumeTime)}`;
 
     _playerReady = false;
-    _currentTime = 0;
+    _currentTime = resumeTime || 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
     if (pl) pl.classList.remove('hidden');
@@ -532,7 +700,7 @@ function playEpisode(showId, season, episode) {
         title: show.name || show.title || '',
         poster_path: show.poster_path || null,
         mediaType: 'tv',
-        currentTime: 1,
+        currentTime: resumeTime || 1,
         duration: 3600,
         season: season,
         episode: episode,
@@ -551,6 +719,17 @@ function playEpisode(showId, season, episode) {
     playerSection.style.display = 'block';
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (updateRoute) {
+        updateUrl({
+            view: 'watch',
+            type: 'tv',
+            id: showId,
+            season,
+            episode,
+            t: resumeTime ? Math.floor(resumeTime) : '',
+        });
+    }
 }
 
 // Go back from series detail to main grid
@@ -559,6 +738,11 @@ function goBackFromSeriesDetail() {
     document.getElementById('seriesDetailSection').style.display = 'none';
     moviesSection.style.display = 'block';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (searchQuery) {
+        updateUrl({ view: 'search', q: searchQuery, tab: activeMainTab });
+    } else {
+        updateUrl({ view: 'home', tab: activeMainTab });
+    }
 }
 
 // Reset all recommendation data
@@ -856,63 +1040,9 @@ function loadContinueWatching() {
 
 function resumeWatching(id, mediaType, currentTime, season, episode) {
     if (mediaType === 'tv' && season != null && episode != null) {
-        // TV show resume
-        _currentPlayingId = id;
-        _currentPlayingMeta = {
-            id, title: '', poster_path: null, mediaType: 'tv',
-            season, episode, vote_average: 0,
-        };
-
-        // Fetch show details from TMDB for title
-        fetch(`${TMDB_BASE_URL}/tv/${id}?api_key=${TMDB_API_KEY}`)
-            .then(r => r.ok ? r.json() : null)
-            .then(show => {
-                if (show) {
-                    _currentPlayingMeta.title = show.name;
-                    _currentPlayingMeta.poster_path = show.poster_path;
-                    document.getElementById('playerTitle').textContent = show.name;
-                    document.getElementById('playerOverview').textContent =
-                        `Season ${season}, Episode ${episode} — ${show.overview || ''}`;
-                    document.getElementById('playerRating').textContent = `⭐ ${(show.vote_average || 0).toFixed(1)}`;
-                    document.getElementById('playerYear').textContent = '';
-                }
-            }).catch(() => {});
-
-        let playerUrl = `${VIDKING_BASE_URL}/tv/${id}/${season}/${episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true`;
-        if (currentTime > 0) playerUrl += `&progress=${Math.floor(currentTime)}`;
-        document.getElementById('videoPlayer').src = playerUrl;
-
-        document.getElementById('playerTitle').textContent = `TV Show ${id}`;
-        document.getElementById('playerOverview').textContent = `Season ${season}, Episode ${episode}`;
-        document.getElementById('playerRating').textContent = '';
-        document.getElementById('playerYear').textContent = '';
-
-        moviesSection.style.display = 'none';
-        playerSection.style.display = 'block';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        openTvPlayer(id, season, episode, currentTime || 0, true);
     } else {
-        // Movie resume — fetch details if not cached
-        const cached = moviesCache[id];
-        if (cached) {
-            const rating = cached.vote_average ? cached.vote_average.toFixed(1) : 'N/A';
-            const year = cached.release_date ? new Date(cached.release_date).getFullYear() : 'N/A';
-            playMovie(id, cached.title, cached.overview, rating, year, currentTime);
-        } else {
-            // Fetch from TMDB
-            fetch(`${TMDB_BASE_URL}/movie/${id}?api_key=${TMDB_API_KEY}`)
-                .then(r => r.ok ? r.json() : null)
-                .then(movie => {
-                    if (movie) {
-                        moviesCache[movie.id] = movie;
-                        const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
-                        const year = movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A';
-                        playMovie(id, movie.title, movie.overview, rating, year, currentTime);
-                    }
-                }).catch(() => {
-                    // Fallback: play without details
-                    playMovie(id, 'Movie', '', 'N/A', 'N/A', currentTime);
-                });
-        }
+        openMovieById(id, currentTime || 0, true);
     }
 }
 
