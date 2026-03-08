@@ -182,6 +182,14 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
     if (resumeTime && resumeTime > 0) {
         playerUrl += `&progress=${Math.floor(resumeTime)}`;
     }
+
+    // Show loading overlay, reset state
+    _playerReady = false;
+    _currentTime = resumeTime || 0;
+    _duration = 0;
+    const pl = document.getElementById('playerLoading');
+    if (pl) pl.classList.remove('hidden');
+
     document.getElementById('videoPlayer').src = playerUrl;
     
     // Update movie details
@@ -263,15 +271,29 @@ function hideNoResults() {
 
 // Watch progress tracking — feeds into recommendation engine + continue watching
 let _currentPlayingId = null;
-let _currentPlayingMeta = null; // { id, title, poster_path, mediaType, season, episode, vote_average }
+let _currentPlayingMeta = null;
+let _currentTime = 0;
+let _duration = 0;
+let _playerReady = false;
 
 window.addEventListener('message', function (event) {
     try {
         const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (!message || !message.event) return;
 
+        // Hide loading overlay once we get any player event
+        if (!_playerReady) {
+            _playerReady = true;
+            const pl = document.getElementById('playerLoading');
+            if (pl) pl.classList.add('hidden');
+        }
+
         const movieId = message.id || _currentPlayingId;
         const movie = movieId ? moviesCache[movieId] : null;
+
+        // Track current playback position for skip controls
+        if (message.currentTime != null) _currentTime = message.currentTime;
+        if (message.duration != null && message.duration > 0) _duration = message.duration;
 
         if (movie && (message.event === 'timeupdate' || message.event === 'pause' || message.event === 'ended')) {
             RecommendationEngine.recordWatch(movie, {
@@ -579,3 +601,89 @@ function formatTime(seconds) {
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
 }
+
+// =========================================================
+// Skip Controls
+// =========================================================
+
+function skipVideo(seconds) {
+    // We can't directly seek inside the iframe, but we can reload
+    // the player at the new timestamp using the progress parameter.
+    const newTime = Math.max(0, Math.min(_currentTime + seconds, _duration - 1));
+    if (!_currentPlayingId || _duration <= 0) return;
+
+    const meta = _currentPlayingMeta || {};
+    let url;
+    if (meta.mediaType === 'tv' && meta.season != null && meta.episode != null) {
+        url = `${VIDKING_BASE_URL}/tv/${_currentPlayingId}/${meta.season}/${meta.episode}?color=3b82f6&autoPlay=true&nextEpisode=true&episodeSelector=true&progress=${Math.floor(newTime)}`;
+    } else {
+        url = `${VIDKING_BASE_URL}/movie/${_currentPlayingId}?color=3b82f6&autoPlay=true&progress=${Math.floor(newTime)}`;
+    }
+
+    // Show loading briefly while iframe reloads
+    const pl = document.getElementById('playerLoading');
+    if (pl) pl.classList.remove('hidden');
+    _playerReady = false;
+    _currentTime = newTime;
+
+    document.getElementById('videoPlayer').src = url;
+
+    // Show skip toast
+    showSkipToast(seconds > 0 ? `Skipped +${seconds}s` : `Skipped ${seconds}s`);
+}
+
+let _skipToastEl = null;
+let _skipToastTimeout = null;
+
+function showSkipToast(text) {
+    if (!_skipToastEl) {
+        _skipToastEl = document.createElement('div');
+        _skipToastEl.className = 'skip-toast';
+        document.querySelector('.player-wrapper').appendChild(_skipToastEl);
+    }
+    clearTimeout(_skipToastTimeout);
+    _skipToastEl.textContent = text;
+    _skipToastEl.classList.add('visible');
+    _skipToastTimeout = setTimeout(() => {
+        _skipToastEl.classList.remove('visible');
+    }, 1500);
+}
+
+// =========================================================
+// Hover Preloading — warm up Vidking connection early
+// =========================================================
+
+let _preloadedConnection = false;
+
+function preloadVidkingConnection() {
+    if (_preloadedConnection) return;
+    _preloadedConnection = true;
+    // Create a tiny hidden fetch to establish the TLS connection early
+    const link = document.createElement('link');
+    link.rel = 'preconnect';
+    link.href = 'https://www.vidking.net';
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+}
+
+// Attach hover preloading to movie cards (delegated)
+document.addEventListener('mouseover', (e) => {
+    if (e.target.closest('.movie-card') || e.target.closest('.cw-card')) {
+        preloadVidkingConnection();
+    }
+});
+
+// Hide loading overlay when iframe finishes loading
+document.addEventListener('DOMContentLoaded', () => {
+    const iframe = document.getElementById('videoPlayer');
+    if (iframe) {
+        iframe.addEventListener('load', () => {
+            // Give a brief moment for the player JS to init, then hide overlay
+            setTimeout(() => {
+                const pl = document.getElementById('playerLoading');
+                if (pl) pl.classList.add('hidden');
+                _playerReady = true;
+            }, 800);
+        });
+    }
+});

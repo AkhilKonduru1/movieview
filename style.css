@@ -141,6 +141,114 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
+    z-index: 1;
+}
+
+/* Skip Controls Overlay — top right */
+.skip-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.player-wrapper:hover .skip-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.skip-btn {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.skip-btn:hover {
+    background: rgba(59, 130, 246, 0.8);
+    border-color: var(--accent-color);
+    transform: scale(1.05);
+}
+
+.skip-btn:active {
+    transform: scale(0.95);
+}
+
+.skip-icon {
+    font-size: 16px;
+}
+
+.skip-label {
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* Skip toast notification — top right */
+.skip-toast {
+    position: absolute;
+    top: 55px;
+    right: 12px;
+    z-index: 15;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.skip-toast.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Player loading overlay */
+.player-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: var(--primary-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    transition: opacity 0.5s ease;
+}
+
+.player-loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.player-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
 .movie-details {
