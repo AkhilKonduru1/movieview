@@ -8,6 +8,7 @@ const VIDKING_BASE_URL = 'https://www.vidking.net/embed';
 let currentPage = 1;
 let searchQuery = '';
 let isLoading = false;
+let activeMainTab = 'home';
 let _currentSeriesId = null;
 let _seriesCache = {};
 
@@ -35,13 +36,65 @@ async function loadHomePage() {
     // Load continue watching immediately (from localStorage, no network)
     loadContinueWatching();
 
-    // Load recommendations and trending in parallel
-    const [recoResult] = await Promise.allSettled([
-        loadRecommendations(),
-    ]);
-
     await loadTrending();
+
+    if (activeMainTab === 'recommendations') {
+        await loadRecommendations();
+    }
+
+    applyTabVisibility();
     hideLoading();
+}
+
+function setMainTab(tab) {
+    activeMainTab = tab;
+
+    const homeBtn = document.getElementById('homeTabBtn');
+    const recoBtn = document.getElementById('recommendationsTabBtn');
+    if (homeBtn) homeBtn.classList.toggle('active', tab === 'home');
+    if (recoBtn) recoBtn.classList.toggle('active', tab === 'recommendations');
+
+    if (searchQuery) {
+        searchContent(searchQuery);
+        return;
+    }
+
+    if (tab === 'home') {
+        loadContinueWatching();
+        loadTrending().then(() => applyTabVisibility());
+    } else {
+        loadRecommendations().then(() => applyTabVisibility());
+    }
+}
+
+function applyTabVisibility() {
+    const continueSection = document.getElementById('continueSection');
+    const trendingTitle = document.getElementById('trendingTitle');
+
+    // During search, show search results only
+    if (searchQuery) {
+        if (continueSection) continueSection.style.display = 'none';
+        ['recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        if (trendingTitle) trendingTitle.style.display = 'block';
+        moviesGrid.style.display = 'grid';
+        return;
+    }
+
+    if (activeMainTab === 'home') {
+        ['recoSection', 'genrePicksSection', 'becauseSection', 'genreStatsSection'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        if (trendingTitle) trendingTitle.style.display = 'block';
+        moviesGrid.style.display = 'grid';
+    } else {
+        if (continueSection) continueSection.style.display = 'none';
+        if (trendingTitle) trendingTitle.style.display = 'none';
+        moviesGrid.style.display = 'none';
+    }
 }
 
 // Setup search with debounce
@@ -140,6 +193,14 @@ async function searchContent(query) {
             displayItems(combined);
             hideNoResults();
         }
+
+        const trendingTitle = document.getElementById('trendingTitle');
+        if (trendingTitle) {
+            trendingTitle.style.display = 'block';
+            trendingTitle.textContent = '🔎 Search Results';
+        }
+
+        moviesGrid.style.display = 'grid';
         
         hideLoading();
     } catch (error) {
@@ -295,7 +356,10 @@ function goBack() {
         searchContent(searchQuery);
     } else {
         loadContinueWatching();
-        loadRecommendations();
+        if (activeMainTab === 'recommendations') {
+            loadRecommendations();
+        }
+        applyTabVisibility();
     }
 }
 
@@ -308,6 +372,11 @@ function goHome() {
     searchQuery = '';
     searchInput.value = '';
     _currentSeriesId = null;
+    activeMainTab = 'home';
+    const homeBtn = document.getElementById('homeTabBtn');
+    const recoBtn = document.getElementById('recommendationsTabBtn');
+    if (homeBtn) homeBtn.classList.add('active');
+    if (recoBtn) recoBtn.classList.remove('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadHomePage();
 }
@@ -498,6 +567,7 @@ function resetRecommendations() {
     RecommendationEngine.clearAllData();
     hideRecoSections();
     document.getElementById('trendingTitle').textContent = '🔥 Trending Movies & Series';
+    applyTabVisibility();
 }
 
 // UI Helper Functions
@@ -686,7 +756,7 @@ function renderRecoRow(gridId, movies, sectionId) {
         `;
     }).join('');
 
-    section.style.display = 'block';
+    section.style.display = (activeMainTab === 'recommendations' && !searchQuery) ? 'block' : 'none';
 }
 
 function renderProfileStrength(stats) {
@@ -722,7 +792,7 @@ function renderGenreProfile(stats) {
         </div>
     `).join('');
 
-    section.style.display = 'block';
+    section.style.display = (activeMainTab === 'recommendations' && !searchQuery) ? 'block' : 'none';
 }
 
 function hideRecoSections() {
@@ -781,7 +851,7 @@ function loadContinueWatching() {
         `;
     }).join('');
 
-    section.style.display = 'block';
+    section.style.display = (activeMainTab === 'home' && !searchQuery) ? 'block' : 'none';
 }
 
 function resumeWatching(id, mediaType, currentTime, season, episode) {

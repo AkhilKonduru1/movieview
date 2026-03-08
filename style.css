@@ -347,6 +347,38 @@ body {
     padding: 40px 0;
 }
 
+.section-tabs {
+    display: inline-flex;
+    gap: 6px;
+    margin-bottom: 26px;
+    background: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 4px;
+}
+
+.section-tab {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.section-tab:hover {
+    color: var(--text-primary);
+}
+
+.section-tab.active {
+    background: var(--accent-color);
+    color: var(--text-primary);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
 .movies-section h2 {
     font-size: 28px;
     margin-bottom: 30px;
@@ -620,6 +652,7 @@ body {
     color: var(--text-secondary);
     line-height: 1.5;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -1031,6 +1064,11 @@ body {
     .movies-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 15px;
+    }
+
+    .section-tabs {
+        width: 100%;
+        justify-content: center;
     }
 
     .movie-details {
