@@ -192,6 +192,17 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime) {
 
     document.getElementById('videoPlayer').src = playerUrl;
     
+    // Immediately create a Continue Watching entry so it shows up on return
+    RecommendationEngine.updateContinueWatching({
+        id: tmdbId,
+        title: title,
+        poster_path: movie ? movie.poster_path : null,
+        mediaType: 'movie',
+        currentTime: resumeTime || 1,
+        duration: 7200, // placeholder ~2h until real duration arrives
+        vote_average: movie ? movie.vote_average : 0,
+    });
+
     // Update movie details
     document.getElementById('playerTitle').textContent = title;
     document.getElementById('playerOverview').textContent = overview || 'No description available';
