@@ -449,6 +449,7 @@ function playMovie(tmdbId, title, overview, rating, year, resumeTime, updateRout
 
     // Show loading overlay, reset state
     _playerReady = false;
+    _isVideoPaused = false;
     _currentTime = resumeTime || 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -688,6 +689,7 @@ function playEpisode(showId, season, episode, opts = {}) {
     if (resumeTime > 0) playerUrl += `&progress=${Math.floor(resumeTime)}`;
 
     _playerReady = false;
+    _isVideoPaused = false;
     _currentTime = resumeTime || 0;
     _duration = 0;
     const pl = document.getElementById('playerLoading');
@@ -786,10 +788,53 @@ let _currentPlayingMeta = null;
 let _currentTime = 0;
 let _duration = 0;
 let _playerReady = false;
+let _isVideoPaused = false;
+let _lastToggleAt = 0;
+
+function normalizePlayerEvent(rawData) {
+    const parsed = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+    if (!parsed) return null;
+    if (parsed.type === 'PLAYER_EVENT' && parsed.data) return parsed.data;
+    return parsed;
+}
+
+function sendVidkingCommand(command) {
+    const iframe = document.getElementById('videoPlayer');
+    if (!iframe || !iframe.contentWindow) return;
+
+    const payloads = [
+        { type: 'PLAYER_COMMAND', data: { command } },
+        { type: 'VIDKING_COMMAND', data: { command } },
+        { command },
+        { action: command },
+    ];
+
+    payloads.forEach(payload => {
+        iframe.contentWindow.postMessage(payload, '*');
+        iframe.contentWindow.postMessage(JSON.stringify(payload), '*');
+    });
+}
+
+function togglePlayerPlayback() {
+    const now = Date.now();
+    if (now - _lastToggleAt < 250) return;
+    _lastToggleAt = now;
+
+    if (_isVideoPaused) {
+        sendVidkingCommand('play');
+        sendVidkingCommand('resume');
+        showSkipToast('Play');
+        _isVideoPaused = false;
+    } else {
+        sendVidkingCommand('pause');
+        showSkipToast('Pause');
+        _isVideoPaused = true;
+    }
+}
 
 window.addEventListener('message', function (event) {
     try {
-        const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        const message = normalizePlayerEvent(event.data);
         if (!message || !message.event) return;
 
         // Hide loading overlay once we get any player event
@@ -798,6 +843,9 @@ window.addEventListener('message', function (event) {
             const pl = document.getElementById('playerLoading');
             if (pl) pl.classList.add('hidden');
         }
+
+        if (message.event === 'play') _isVideoPaused = false;
+        if (message.event === 'pause' || message.event === 'ended') _isVideoPaused = true;
 
         const movieId = message.id || _currentPlayingId;
         const movie = movieId ? moviesCache[movieId] : null;
@@ -1134,6 +1182,11 @@ document.addEventListener('mouseover', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     const iframe = document.getElementById('videoPlayer');
     if (iframe) {
+        iframe.addEventListener('click', () => {
+            if (!playerSection || playerSection.style.display === 'none') return;
+            togglePlayerPlayback();
+        });
+
         iframe.addEventListener('load', () => {
             // Give a brief moment for the player JS to init, then hide overlay
             setTimeout(() => {
